@@ -137,29 +137,29 @@ func TestDownload(t *testing.T) {
 
 	clientCases := []clientTestCase{
 		// 正常系：Accept Rangeが存在する
-		// {
-		// 	downloader: Client{
-		// 		Url: "https://sample-img.lb-product.com/wp-content/themes/hitchcock/images/10MB.png",
-		// 		Split: 5,
-		// 		ByteData: make([][]byte, 5),
-		// 	},
-		// },
-		// // 正常系：Accept-Rangeが存在しない
-		// {
-		// 	downloader: Client{
-		// 		Url: "https://farm8.staticflickr.com/7151/6760135001_14c59a1490_o.jpg",
-		// 		Split: 5,
-		// 		ByteData: make([][]byte, 5),
-		// 	},
-		// },
-		// // 正常系：Content-Lengthが存在しない
-		// {
-		// 	downloader: Client{
-		// 		Url: "https://www.ricoh-imaging.co.jp/japan/dc/past/rdc/7/img/rdc7_sample01b.jpg",
-		// 		Split: 5,
-		// 		ByteData: make([][]byte, 5),
-		// 	},
-		// },
+		{
+			downloader: Client{
+				Url: "https://sample-img.lb-product.com/wp-content/themes/hitchcock/images/10MB.png",
+				Split: 5,
+				ByteData: make([][]byte, 5),
+			},
+		},
+		// 正常系：Accept-Rangeが存在しない
+		{
+			downloader: Client{
+				Url: "https://farm8.staticflickr.com/7151/6760135001_14c59a1490_o.jpg",
+				Split: 5,
+				ByteData: make([][]byte, 5),
+			},
+		},
+		// 正常系：Content-Lengthが存在しない
+		{
+			downloader: Client{
+				Url: "https://www.ricoh-imaging.co.jp/japan/dc/past/rdc/7/img/rdc7_sample01b.jpg",
+				Split: 5,
+				ByteData: make([][]byte, 5),
+			},
+		},
 		// 異常系：リクエストできない
 		{
 			downloader: Client{
