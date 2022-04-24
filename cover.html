@@ -1,0 +1,320 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>downloader: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">picget/downloader/downloader.go (42.2%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package downloader
+
+import (
+  "os"
+        "bytes"
+        "encoding/binary"
+        "context"
+        "errors"
+        "net/http"
+        "path/filepath"
+        "time"
+        "strconv"
+  "fmt"
+        "io/ioutil"
+
+        "golang.org/x/sync/errgroup"
+        "golang.org/x/net/context/ctxhttp"
+)
+
+type Client struct {
+        Url            string
+        Split           int
+        Path     string
+        ByteData [][]byte
+}
+
+type PicGet interface {
+        ValidClient() error
+        Download (ctx context.Context) error
+        FileMerge (ctx context.Context) error
+}
+
+/*
+作成したDownloaderのクライアントを検証
+@param なし
+@return error
+*/
+func (c *Client) ValidClient() error <span class="cov8" title="1">{
+        // I/Oの拡張子チェック
+        var exts = [6]string{".jpg", ".jpeg", ".png"}
+        urlExt := false
+        pathExt := false
+        
+        for _, v := range exts </span><span class="cov8" title="1">{
+                if v == filepath.Ext(c.Url) </span><span class="cov8" title="1">{
+                        urlExt = true
+                }</span>
+
+                <span class="cov8" title="1">if v == filepath.Ext(c.Path) </span><span class="cov8" title="1">{
+                        pathExt = true
+                }</span>
+        }
+        
+        <span class="cov8" title="1">if !urlExt || !pathExt</span><span class="cov8" title="1">{
+                return errors.New("invalid exetention")
+        }</span>
+
+        // 分割数チェック
+        // 分割数が
+        <span class="cov8" title="1">if c.Split &lt; 1 </span><span class="cov8" title="1">{
+                return errors.New("the number of download divisions is 1 or more")
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+/*
+HTTPリクエストを行う
+*/
+func (c *Client) doRequest(ctx context.Context, req *http.Request) (*http.Response, error) <span class="cov8" title="1">{
+        client := &amp;http.Client {
+                Timeout: 60 * time.Second,
+        }
+
+        res, err := ctxhttp.Do(ctx, client, req)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+  <span class="cov8" title="1">return res, nil</span>
+}
+
+/*
+HTTPリクエストを行い、RangeAccessが可能かどうかを判断する
+同時にContentLengthのデータを取得する
+*/
+func (c *Client) canRangeAccess(ctx context.Context) (bool, int, error) <span class="cov8" title="1">{
+  req, _ := http.NewRequest("HEAD", c.Url, nil)
+
+        res, err := c.doRequest(ctx, req)
+  if err != nil </span><span class="cov8" title="1">{
+    return false, 0, err
+  }</span>
+  <span class="cov8" title="1">defer res.Body.Close()
+
+  // Range Accessできるかのチェック
+  _, hasRangeAccess := res.Header["Accept-Ranges"];
+
+        // Content Lengthがない場合は分割ダウンロードをさせない
+        if _, hasContentLength := res.Header["Content-Length"]; !hasContentLength </span><span class="cov8" title="1">{
+                return false, 0, nil
+        }</span>
+
+        // Content Lengthが存在する場合は、
+        <span class="cov8" title="1">contentLength, err := strconv.Atoi(res.Header["Content-Length"][0])
+  if err != nil </span><span class="cov0" title="0">{
+    return false, 0, err
+  }</span>
+
+        <span class="cov8" title="1">fmt.Println(hasRangeAccess, contentLength)
+
+  return hasRangeAccess, contentLength, nil</span>
+}
+
+/*
+Downloadを行う
+Clientのsplitが2以上であれば、分割ダウンロードを行う
+*/
+func (c *Client) Download(ctx context.Context) error <span class="cov8" title="1">{
+        eg, _ := errgroup.WithContext(ctx)
+  byteRange := make([]string, c.Split)
+
+  hasRangeAccess, contentLength, err := c.canRangeAccess(ctx)
+  if err != nil </span><span class="cov8" title="1">{
+    return err
+  }</span>
+
+  <span class="cov0" title="0">if !hasRangeAccess </span><span class="cov0" title="0">{
+    c.Split = 1
+                fmt.Println("[Info] RangeAccessができないため、分割数を1に設定します")
+  }</span> else<span class="cov0" title="0"> {
+    byteRange = c.getByteRange(contentLength)
+  }</span>
+
+        <span class="cov0" title="0">fmt.Println("[Info] ダウンロード開始...")
+  for i := 0; i &lt; c.Split; i++ </span><span class="cov0" title="0">{
+    i := i
+    eg.Go(func() error </span><span class="cov0" title="0">{
+                        req, _ := http.NewRequest("GET", c.Url, nil)
+
+                        if hasRangeAccess </span><span class="cov0" title="0">{
+                                req.Header.Set("Range", "bytes="+byteRange[i])
+                        }</span>
+
+                        <span class="cov0" title="0">res, err := c.doRequest(ctx, req)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov0" title="0">defer res.Body.Close()
+
+                        data, err := ioutil.ReadAll(res.Body)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov0" title="0">c.ByteData[i] = data
+
+                        return nil</span>
+    })
+  }
+
+  <span class="cov0" title="0">if err := eg.Wait(); err != nil </span><span class="cov0" title="0">{
+    return err
+  }</span>
+
+        <span class="cov0" title="0">fmt.Println("[Info] ダウンロード終了")
+
+  return nil</span>
+}
+
+/*
+分割ダウンロードを行う際のbyteの繁栄を決定
+*/
+func (c *Client) getByteRange(contentLength int) []string <span class="cov0" title="0">{
+  chunk := contentLength / c.Split
+        byteRange := make([]string, c.Split)
+
+        for i := 0; i &lt; c.Split; i++ </span><span class="cov0" title="0">{
+                begin := chunk * i
+                if i == c.Split-1 </span><span class="cov0" title="0">{
+                        byteRange[i] = fmt.Sprintf("%d-%d", begin, contentLength)
+                }</span> else<span class="cov0" title="0"> {
+                        end := chunk*(i+1) - 1
+                        byteRange[i] = fmt.Sprintf("%d-%d", begin, end)
+                }</span>
+        }
+  <span class="cov0" title="0">return byteRange</span>
+}
+
+/*
+取得したbyte列をマージして、ファイルを作成。その後、コピーする
+*/
+func (c *Client) FileMerge(ctx context.Context) error <span class="cov0" title="0">{
+        buf := &amp;bytes.Buffer{}
+
+        for i := 0; i &lt; c.Split; i++ </span><span class="cov0" title="0">{
+                err := binary.Write(buf, binary.BigEndian, c.ByteData[i])
+                if err != nil </span><span class="cov0" title="0">{
+                        fmt.Println(err)
+                }</span>
+        }
+
+        <span class="cov0" title="0">file, err := os.Create(c.Path)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">defer file.Close()
+
+        fmt.Println("[info] ファイルへ書き込み中です。。。")
+        if _, err := file.Write(buf.Bytes()); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">fmt.Println("[info] ファイルへの書き込みが完了しました！")
+
+  return nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

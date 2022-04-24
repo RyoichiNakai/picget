@@ -67,10 +67,11 @@ func (c *Client) ValidClient() error {
 /*
 HTTPリクエストを行う
 */
-func (c *Client) request(ctx context.Context, req *http.Request) (*http.Response, error) {
+func (c *Client) doRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
 	client := &http.Client {
 		Timeout: 60 * time.Second,
 	}
+
 	res, err := ctxhttp.Do(ctx, client, req)
 	if err != nil {
 		return nil, err
@@ -83,27 +84,32 @@ func (c *Client) request(ctx context.Context, req *http.Request) (*http.Response
 HTTPリクエストを行い、RangeAccessが可能かどうかを判断する
 同時にContentLengthのデータを取得する
 */
-func (c *Client) hasRangeAceess(ctx context.Context, ) (bool, int, error) {
-  req, err := http.NewRequest("HEAD", c.Url, nil)
-	if err != nil {
-		return false, 0, err
-	}
+func (c *Client) canRangeAccess(ctx context.Context) (bool, int, error) {
+  req, _ := http.NewRequest("HEAD", c.Url, nil)
 
-	res, err := c.request(ctx, req)
+	res, err := c.doRequest(ctx, req)
   if err != nil {
     return false, 0, err
   }
   defer res.Body.Close()
 
   // Range Accessできるかのチェック
-  _, ok := res.Header["Accept-Ranges"];
+  _, hasRangeAccess := res.Header["Accept-Ranges"];
 
+	// Content Lengthがない場合は分割ダウンロードをさせない
+	if _, hasContentLength := res.Header["Content-Length"]; !hasContentLength {
+		return false, 0, nil
+	}
+
+	// Content Lengthが存在する場合は、
 	contentLength, err := strconv.Atoi(res.Header["Content-Length"][0])
   if err != nil {
     return false, 0, err
   }
 
-  return ok, contentLength, nil
+	fmt.Println(hasRangeAccess, contentLength)
+
+  return hasRangeAccess, contentLength, nil
 }
 
 /*
@@ -114,13 +120,14 @@ func (c *Client) Download(ctx context.Context) error {
 	eg, _ := errgroup.WithContext(ctx)
   byteRange := make([]string, c.Split)
 
-  canRangeAccess, contentLength, err := c.hasRangeAceess(ctx)
+  hasRangeAccess, contentLength, err := c.canRangeAccess(ctx)
   if err != nil {
     return err
   }
 
-  if !canRangeAccess {
+  if !hasRangeAccess {
     c.Split = 1
+		fmt.Println("[Info] RangeAccessができないため、分割数を1に設定します")
   } else {
     byteRange = c.getByteRange(contentLength)
   }
@@ -129,16 +136,13 @@ func (c *Client) Download(ctx context.Context) error {
   for i := 0; i < c.Split; i++ {
     i := i
     eg.Go(func() error {
-			req, err := http.NewRequest("GET", c.Url, nil)
-			if err != nil {
-				return err
-			}
+			req, _ := http.NewRequest("GET", c.Url, nil)
 
-			if canRangeAccess {
+			if hasRangeAccess {
 				req.Header.Set("Range", "bytes="+byteRange[i])
 			}
 
-			res, err := c.request(ctx, req)
+			res, err := c.doRequest(ctx, req)
 			if err != nil {
 				return err
 			}
